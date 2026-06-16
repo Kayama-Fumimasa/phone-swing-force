@@ -85,7 +85,7 @@
 <body>
   <main class="screen">
     <button id="startButton" class="button">計測を開始</button>
-    <div id="mainText" class="main hidden">スマートフォンを振ってください</div>
+    <div id="mainText" class="main hidden">スマホを振ってください</div>
   </main>
 
   <script>
@@ -126,11 +126,11 @@
     }
 
     function showWaiting() {
-      mainText.textContent = "スマートフォンを振ってください";
+      mainText.textContent = "スマホを振ってください";
     }
 
     function showResult(forceN) {
-      mainText.innerHTML = `この一振りは、<span class="value">${forceN.toFixed(2)}N</span>`;
+      mainText.innerHTML = `この一振りは<span class="value">${forceN.toFixed(2)}N</span>`;
     }
 
     function handleMotion(event) {
