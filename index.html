@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#000000" />
   <title>この一振り</title>
 
   <style>
@@ -10,8 +11,8 @@
       margin: 0;
       width: 100%;
       height: 100%;
-      background: #f6f6f4;
-      color: #111;
+      background: #000;
+      color: #f5f5f5;
       font-family: "Hiragino Kaku Gothic ProN", "Hiragino Sans", "ヒラギノ角ゴ ProN W3", "Yu Gothic", sans-serif;
       overflow: hidden;
       -webkit-user-select: none;
@@ -22,24 +23,13 @@
     .screen {
       width: 100%;
       height: 100%;
-      box-sizing: border-box;
-      padding: 28px;
+      min-height: 100svh;
       display: flex;
       align-items: center;
       justify-content: center;
-    }
-
-    .card {
-      width: min(86vw, 520px);
-      min-height: 180px;
+      padding: 24px;
       box-sizing: border-box;
-      padding: 34px 36px;
-      border: 1px solid rgba(0, 0, 0, 0.08);
-      border-radius: 28px;
-      background: rgba(255, 255, 255, 0.42);
-      display: flex;
-      align-items: center;
-      justify-content: flex-start;
+      text-align: center;
     }
 
     .main {
@@ -49,16 +39,36 @@
       background: transparent;
       color: inherit;
       font-family: inherit;
-      font-size: clamp(18px, 5vw, 23px);
-      font-weight: 400;
-      letter-spacing: 0.035em;
-      line-height: 1.5;
-      text-align: left;
+      font-size: clamp(15px, 4vw, 21px);
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      line-height: 1.7;
+      text-align: center;
       white-space: nowrap;
     }
 
-    .main:active {
-      opacity: 0.45;
+    .button {
+      appearance: none;
+      -webkit-appearance: none;
+      background: transparent;
+      color: inherit;
+      font-family: inherit;
+      font-size: clamp(15px, 4vw, 21px);
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      line-height: 1.7;
+      text-align: center;
+      white-space: nowrap;
+
+      border: 1px solid rgba(245, 245, 245, 0.8);
+      border-radius: 0;
+      padding: 0.5em 1em;
+      margin: 0;
+      box-sizing: border-box;
+    }
+
+    .button:active {
+      opacity: 0.5;
     }
 
     .value {
@@ -74,20 +84,16 @@
 
 <body>
   <main class="screen">
-    <section class="card">
-      <button id="startButton" class="main">計測を開始</button>
-      <div id="mainText" class="main hidden">スマートフォンを振ってください</div>
-    </section>
+    <button id="startButton" class="button">計測を開始</button>
+    <div id="mainText" class="main hidden">スマートフォンを振ってください</div>
   </main>
 
   <script>
     const startButton = document.getElementById("startButton");
     const mainText = document.getElementById("mainText");
 
-    // 端末重量の仮設定。後で機種別の重量表に変更できます。
     const phoneMassKg = 0.20;
 
-    // 振り判定
     const startThreshold = 5.0;
     const endThreshold = 1.2;
 
