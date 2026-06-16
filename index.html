@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>この一振り</title>
+
+  <style>
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      background: #f7f7f5;
+      color: #111;
+      font-family: "Hiragino Kaku Gothic ProN", "Hiragino Sans", "ヒラギノ角ゴ ProN W3", "Yu Gothic", sans-serif;
+      overflow: hidden;
+      -webkit-user-select: none;
+      user-select: none;
+      touch-action: none;
+    }
+
+    .screen {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-sizing: border-box;
+      padding: 32px;
+      text-align: center;
+      flex-direction: column;
+    }
+
+    .main {
+      font-size: clamp(28px, 8vw, 58px);
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      line-height: 1.35;
+    }
+
+    .sub {
+      margin-top: 18px;
+      font-size: 13px;
+      line-height: 1.7;
+      color: #777;
+      letter-spacing: 0.04em;
+    }
+
+    .button {
+      margin-top: 28px;
+      appearance: none;
+      border: 1px solid #111;
+      background: transparent;
+      color: #111;
+      border-radius: 999px;
+      padding: 13px 24px;
+      font-family: inherit;
+      font-size: 15px;
+      letter-spacing: 0.04em;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    .value {
+      font-variant-numeric: tabular-nums;
+    }
+  </style>
+</head>
+
+<body>
+  <main class="screen">
+    <div id="mainText" class="main">スマートフォンを振ってください</div>
+    <div id="subText" class="sub">端末の動きから、この一振りの慣性力を推定します。</div>
+    <button id="startButton" class="button">計測を開始</button>
+  </main>
+
+  <script>
+    const mainText = document.getElementById("mainText");
+    const subText = document.getElementById("subText");
+    const startButton = document.getElementById("startButton");
+
+    // とりあえずの標準値。後で端末別重量表に置き換え可能。
+    const phoneMassKg = 0.20;
+
+    // 振り判定のしきい値
+    const startThreshold = 5.0; // m/s² これ以上で「振り始め」
+    const endThreshold = 1.2;   // m/s² これ以下が続くと「振り終わり」
+
+    let isMeasuring = false;
+    let peakAcceleration = 0;
+    let sumAcceleration = 0;
+    let sampleCount = 0;
+    let quietStartTime = null;
+    let lastResultTime = 0;
+
+    function getDynamicAcceleration(event) {
+      const a = event.acceleration;
+
+      if (a && a.x !== null && a.y !== null && a.z !== null) {
+        const x = a.x || 0;
+        const y = a.y || 0;
+        const z = a.z || 0;
+        return Math.sqrt(x * x + y * y + z * z);
+      }
+
+      // acceleration が取れない場合の簡易フォールバック
+      const g = event.accelerationIncludingGravity;
+      if (g && g.x !== null && g.y !== null && g.z !== null) {
+        const x = g.x || 0;
+        const y = g.y || 0;
+        const z = g.z || 0;
+        const magnitude = Math.sqrt(x * x + y * y + z * z);
+
+        // 重力 9.8m/s² との差分を「動き」として扱う
+        return Math.abs(magnitude - 9.80665);
+      }
+
+      return 0;
+    }
+
+    function showWaiting() {
+      mainText.textContent = "スマートフォンを振ってください";
+      subText.textContent = "強く振ると、この一振りの結果が表示されます。";
+    }
+
+    function showMeasuring() {
+      mainText.textContent = "計測中";
+      subText.textContent = "この一振りを記録しています。";
+    }
+
+    function showResult(forceN) {
+      mainText.innerHTML = `この一振りは、<span class="value">${forceN.toFixed(2)}N</span>`;
+      subText.textContent = "端末の加速度と推定重量から計算した慣性力です。";
+    }
+
+    function handleMotion(event) {
+      const now = performance.now();
+
+      const dynamicA = getDynamicAcceleration(event);
+
+      if (!isMeasuring) {
+        // 結果表示直後の小さな揺れで再計測しないための待ち時間
+        if (now - lastResultTime < 700) return;
+
+        if (dynamicA > startThreshold) {
+          isMeasuring = true;
+          peakAcceleration = dynamicA;
+          sumAcceleration = dynamicA;
+          sampleCount = 1;
+          quietStartTime = null;
+          showMeasuring();
+        }
+
+        return;
+      }
+
+      peakAcceleration = Math.max(peakAcceleration, dynamicA);
+      sumAcceleration += dynamicA;
+      sampleCount++;
+
+      if (dynamicA < endThreshold) {
+        if (quietStartTime === null) {
+          quietStartTime = now;
+        }
+
+        if (now - quietStartTime > 350) {
+          isMeasuring = false;
+          lastResultTime = now;
+
+          const forceN = phoneMassKg * peakAcceleration;
+          showResult(forceN);
+        }
+      } else {
+        quietStartTime = null;
+      }
+    }
+
+    async function startMeasurement() {
+      startButton.classList.add("hidden");
+
+      try {
+        if (
+          typeof DeviceMotionEvent !== "undefined" &&
+          typeof DeviceMotionEvent.requestPermission === "function"
+        ) {
+          const permission = await DeviceMotionEvent.requestPermission();
+
+          if (permission !== "granted") {
+            mainText.textContent = "許可が必要です";
+            subText.textContent = "モーションセンサーの使用を許可してください。";
+            startButton.classList.remove("hidden");
+            return;
+          }
+        }
+
+        window.addEventListener("devicemotion", handleMotion);
+        showWaiting();
+
+      } catch (error) {
+        mainText.textContent = "計測できません";
+        subText.textContent = "このブラウザではモーションセンサーを使用できない可能性があります。";
+        startButton.classList.remove("hidden");
+      }
+    }
+
+    startButton.addEventListener("click", startMeasurement);
+  </script>
+</body>
+</html>
