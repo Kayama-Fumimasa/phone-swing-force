@@ -10,7 +10,7 @@
       margin: 0;
       width: 100%;
       height: 100%;
-      background: #f7f7f5;
+      background: #f6f6f4;
       color: #111;
       font-family: "Hiragino Kaku Gothic ProN", "Hiragino Sans", "ヒラギノ角ゴ ProN W3", "Yu Gothic", sans-serif;
       overflow: hidden;
@@ -22,76 +22,77 @@
     .screen {
       width: 100%;
       height: 100%;
+      box-sizing: border-box;
+      padding: 28px;
       display: flex;
       align-items: center;
       justify-content: center;
+    }
+
+    .card {
+      width: min(86vw, 520px);
+      min-height: 180px;
       box-sizing: border-box;
-      padding: 32px;
-      text-align: center;
-      flex-direction: column;
+      padding: 34px 36px;
+      border: 1px solid rgba(0, 0, 0, 0.08);
+      border-radius: 28px;
+      background: rgba(255, 255, 255, 0.42);
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
     }
 
     .main {
-      font-size: clamp(28px, 8vw, 58px);
-      font-weight: 600;
-      letter-spacing: 0.02em;
-      line-height: 1.35;
-    }
-
-    .sub {
-      margin-top: 18px;
-      font-size: 13px;
-      line-height: 1.7;
-      color: #777;
-      letter-spacing: 0.04em;
-    }
-
-    .button {
-      margin-top: 28px;
-      appearance: none;
-      border: 1px solid #111;
+      margin: 0;
+      padding: 0;
+      border: none;
       background: transparent;
-      color: #111;
-      border-radius: 999px;
-      padding: 13px 24px;
+      color: inherit;
       font-family: inherit;
-      font-size: 15px;
-      letter-spacing: 0.04em;
+      font-size: clamp(18px, 5vw, 23px);
+      font-weight: 400;
+      letter-spacing: 0.035em;
+      line-height: 1.5;
+      text-align: left;
+      white-space: nowrap;
     }
 
-    .hidden {
-      display: none;
+    .main:active {
+      opacity: 0.45;
     }
 
     .value {
       font-variant-numeric: tabular-nums;
+      letter-spacing: 0.02em;
+    }
+
+    .hidden {
+      display: none;
     }
   </style>
 </head>
 
 <body>
   <main class="screen">
-    <div id="mainText" class="main">スマートフォンを振ってください</div>
-    <div id="subText" class="sub">端末の動きから、この一振りの慣性力を推定します。</div>
-    <button id="startButton" class="button">計測を開始</button>
+    <section class="card">
+      <button id="startButton" class="main">計測を開始</button>
+      <div id="mainText" class="main hidden">スマートフォンを振ってください</div>
+    </section>
   </main>
 
   <script>
-    const mainText = document.getElementById("mainText");
-    const subText = document.getElementById("subText");
     const startButton = document.getElementById("startButton");
+    const mainText = document.getElementById("mainText");
 
-    // とりあえずの標準値。後で端末別重量表に置き換え可能。
+    // 端末重量の仮設定。後で機種別の重量表に変更できます。
     const phoneMassKg = 0.20;
 
-    // 振り判定のしきい値
-    const startThreshold = 5.0; // m/s² これ以上で「振り始め」
-    const endThreshold = 1.2;   // m/s² これ以下が続くと「振り終わり」
+    // 振り判定
+    const startThreshold = 5.0;
+    const endThreshold = 1.2;
 
     let isMeasuring = false;
     let peakAcceleration = 0;
-    let sumAcceleration = 0;
-    let sampleCount = 0;
     let quietStartTime = null;
     let lastResultTime = 0;
 
@@ -105,15 +106,13 @@
         return Math.sqrt(x * x + y * y + z * z);
       }
 
-      // acceleration が取れない場合の簡易フォールバック
       const g = event.accelerationIncludingGravity;
+
       if (g && g.x !== null && g.y !== null && g.z !== null) {
         const x = g.x || 0;
         const y = g.y || 0;
         const z = g.z || 0;
         const magnitude = Math.sqrt(x * x + y * y + z * z);
-
-        // 重力 9.8m/s² との差分を「動き」として扱う
         return Math.abs(magnitude - 9.80665);
       }
 
@@ -122,43 +121,29 @@
 
     function showWaiting() {
       mainText.textContent = "スマートフォンを振ってください";
-      subText.textContent = "強く振ると、この一振りの結果が表示されます。";
-    }
-
-    function showMeasuring() {
-      mainText.textContent = "計測中";
-      subText.textContent = "この一振りを記録しています。";
     }
 
     function showResult(forceN) {
       mainText.innerHTML = `この一振りは、<span class="value">${forceN.toFixed(2)}N</span>`;
-      subText.textContent = "端末の加速度と推定重量から計算した慣性力です。";
     }
 
     function handleMotion(event) {
       const now = performance.now();
-
       const dynamicA = getDynamicAcceleration(event);
 
       if (!isMeasuring) {
-        // 結果表示直後の小さな揺れで再計測しないための待ち時間
         if (now - lastResultTime < 700) return;
 
         if (dynamicA > startThreshold) {
           isMeasuring = true;
           peakAcceleration = dynamicA;
-          sumAcceleration = dynamicA;
-          sampleCount = 1;
           quietStartTime = null;
-          showMeasuring();
         }
 
         return;
       }
 
       peakAcceleration = Math.max(peakAcceleration, dynamicA);
-      sumAcceleration += dynamicA;
-      sampleCount++;
 
       if (dynamicA < endThreshold) {
         if (quietStartTime === null) {
@@ -178,8 +163,6 @@
     }
 
     async function startMeasurement() {
-      startButton.classList.add("hidden");
-
       try {
         if (
           typeof DeviceMotionEvent !== "undefined" &&
@@ -188,20 +171,19 @@
           const permission = await DeviceMotionEvent.requestPermission();
 
           if (permission !== "granted") {
-            mainText.textContent = "許可が必要です";
-            subText.textContent = "モーションセンサーの使用を許可してください。";
-            startButton.classList.remove("hidden");
+            startButton.textContent = "許可が必要です";
             return;
           }
         }
 
-        window.addEventListener("devicemotion", handleMotion);
+        startButton.classList.add("hidden");
+        mainText.classList.remove("hidden");
         showWaiting();
 
+        window.addEventListener("devicemotion", handleMotion);
+
       } catch (error) {
-        mainText.textContent = "計測できません";
-        subText.textContent = "このブラウザではモーションセンサーを使用できない可能性があります。";
-        startButton.classList.remove("hidden");
+        startButton.textContent = "計測できません";
       }
     }
 
