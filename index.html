@@ -42,9 +42,9 @@
       font-size: clamp(15px, 4vw, 21px);
       font-weight: 600;
       letter-spacing: 0.05em;
-      line-height: 1.7;
+      line-height: 1.5;
       text-align: center;
-      white-space: nowrap;
+      white-space: normal;
     }
 
     .button {
@@ -85,7 +85,7 @@
 <body>
   <main class="screen">
     <button id="startButton" class="button">計測を開始</button>
-    <div id="mainText" class="main hidden">スマホを振ってください</div>
+    <div id="mainText" class="main hidden">スマートフォンを振ってください</div>
   </main>
 
   <script>
@@ -126,11 +126,11 @@
     }
 
     function showWaiting() {
-      mainText.textContent = "スマホを振ってください";
+      mainText.textContent = "スマートフォンを振ってください";
     }
 
     function showResult(forceN) {
-      mainText.innerHTML = `この一振りは<span class="value">${forceN.toFixed(2)}N</span>`;
+      mainText.innerHTML = `この一振り<br><span class="value">${forceN.toFixed(2)}N</span>`;
     }
 
     function handleMotion(event) {
