@@ -92,7 +92,13 @@
     const startButton = document.getElementById("startButton");
     const mainText = document.getElementById("mainText");
 
-    const phoneMassKg = 0.20;
+    // 初期値。端末推定に失敗した場合は 200g として計算します。
+    let phoneMassKg = 0.20;
+    let deviceEstimate = {
+      name: "標準端末",
+      massKg: 0.20,
+      confidence: "default"
+    };
 
     const startThreshold = 5.0;
     const endThreshold = 1.2;
@@ -101,6 +107,221 @@
     let peakAcceleration = 0;
     let quietStartTime = null;
     let lastResultTime = 0;
+
+    function getScreenProfile() {
+      const width = Math.min(window.screen.width, window.screen.height);
+      const height = Math.max(window.screen.width, window.screen.height);
+      const dpr = Math.round((window.devicePixelRatio || 1) * 10) / 10;
+
+      return { width, height, dpr };
+    }
+
+    function getManualMassFromUrl() {
+      const params = new URLSearchParams(window.location.search);
+
+      const kg = Number(params.get("kg") || params.get("massKg"));
+      if (!Number.isNaN(kg) && kg >= 0.08 && kg <= 1.00) {
+        return {
+          name: "手動入力",
+          massKg: kg,
+          confidence: "manual"
+        };
+      }
+
+      const gram = Number(params.get("g") || params.get("gram"));
+      if (!Number.isNaN(gram) && gram >= 80 && gram <= 1000) {
+        return {
+          name: "手動入力",
+          massKg: gram / 1000,
+          confidence: "manual"
+        };
+      }
+
+      return null;
+    }
+
+    async function getAndroidModelName() {
+      if (
+        navigator.userAgentData &&
+        typeof navigator.userAgentData.getHighEntropyValues === "function"
+      ) {
+        try {
+          const values = await navigator.userAgentData.getHighEntropyValues([
+            "platform",
+            "model"
+          ]);
+
+          if (values && values.model) {
+            return values.model;
+          }
+        } catch (error) {
+          return "";
+        }
+      }
+
+      return "";
+    }
+
+    function estimateIPhoneMass() {
+      const { width, height, dpr } = getScreenProfile();
+
+      // iPhone は Safari 上で正確な機種名を取得しにくいため、
+      // CSS 画面サイズと devicePixelRatio から「近い重量帯」を推定します。
+      const iPhoneRules = [
+        {
+          width: 320,
+          height: 568,
+          dpr: 2,
+          name: "iPhone SE / 5系",
+          massKg: 0.120
+        },
+        {
+          width: 375,
+          height: 667,
+          dpr: 2,
+          name: "iPhone SE / 6 / 7 / 8系",
+          massKg: 0.145
+        },
+        {
+          width: 414,
+          height: 736,
+          dpr: 3,
+          name: "iPhone Plus系",
+          massKg: 0.190
+        },
+        {
+          width: 375,
+          height: 812,
+          dpr: 3,
+          name: "iPhone X / XS / 11 Pro系",
+          massKg: 0.180
+        },
+        {
+          width: 360,
+          height: 780,
+          dpr: 3,
+          name: "iPhone mini系",
+          massKg: 0.140
+        },
+        {
+          width: 390,
+          height: 844,
+          dpr: 3,
+          name: "iPhone 標準サイズ系",
+          massKg: 0.175
+        },
+        {
+          width: 393,
+          height: 852,
+          dpr: 3,
+          name: "iPhone Pro系",
+          massKg: 0.190
+        },
+        {
+          width: 414,
+          height: 896,
+          dpr: 2,
+          name: "iPhone XR / 11系",
+          massKg: 0.195
+        },
+        {
+          width: 414,
+          height: 896,
+          dpr: 3,
+          name: "iPhone Max系",
+          massKg: 0.220
+        },
+        {
+          width: 428,
+          height: 926,
+          dpr: 3,
+          name: "iPhone Plus / Pro Max系",
+          massKg: 0.220
+        },
+        {
+          width: 430,
+          height: 932,
+          dpr: 3,
+          name: "iPhone Pro Max系",
+          massKg: 0.225
+        }
+      ];
+
+      const match = iPhoneRules.find((rule) => {
+        return (
+          Math.abs(rule.width - width) <= 2 &&
+          Math.abs(rule.height - height) <= 2 &&
+          Math.abs(rule.dpr - dpr) <= 0.1
+        );
+      });
+
+      if (match) {
+        return {
+          name: match.name,
+          massKg: match.massKg,
+          confidence: "screen"
+        };
+      }
+
+      return {
+        name: "iPhone 推定",
+        massKg: 0.190,
+        confidence: "fallback"
+      };
+    }
+
+    async function estimateDeviceMass() {
+      const manualMass = getManualMassFromUrl();
+      if (manualMass) return manualMass;
+
+      const ua = navigator.userAgent || "";
+      const platform = navigator.platform || "";
+      const isIPhone = /iPhone/.test(ua);
+      const isIPad =
+        /iPad/.test(ua) ||
+        (platform === "MacIntel" && navigator.maxTouchPoints > 1);
+      const isAndroid = /Android/.test(ua);
+
+      if (isIPhone) {
+        return estimateIPhoneMass();
+      }
+
+      if (isIPad) {
+        return {
+          name: "iPad 推定",
+          massKg: 0.500,
+          confidence: "fallback"
+        };
+      }
+
+      if (isAndroid) {
+        const modelName = await getAndroidModelName();
+
+        // Android は機種名が取れる場合がありますが、
+        // 重量表がない機種では標準値 200g を使います。
+        return {
+          name: modelName ? modelName : "Android 推定",
+          massKg: 0.200,
+          confidence: modelName ? "model-name-only" : "fallback"
+        };
+      }
+
+      return {
+        name: "標準端末",
+        massKg: 0.200,
+        confidence: "default"
+      };
+    }
+
+    async function applyEstimatedDeviceMass() {
+      deviceEstimate = await estimateDeviceMass();
+      phoneMassKg = deviceEstimate.massKg;
+
+      // 画面には出さず、確認用にコンソールへ出します。
+      console.log(
+        `推定端末: ${deviceEstimate.name}, 重量: ${(phoneMassKg * 1000).toFixed(0)}g, confidence: ${deviceEstimate.confidence}`
+      );
+    }
 
     function getDynamicAcceleration(event) {
       const a = event.acceleration;
@@ -170,6 +391,8 @@
 
     async function startMeasurement() {
       try {
+        await applyEstimatedDeviceMass();
+
         if (
           typeof DeviceMotionEvent !== "undefined" &&
           typeof DeviceMotionEvent.requestPermission === "function"
